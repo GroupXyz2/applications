@@ -4,12 +4,14 @@ from tkinter import filedialog
 import pygame
 from mutagen.mp3 import MP3
 from tkinter import ttk
+import keyboard
+import threading
 import time
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
 config_path = os.path.join(script_directory, 'config.txt')
 icon_path = os.path.join(script_directory, 'icon.ico')
-version = "V1.0"
+version = "V1.4.5"
 
 class MusicPlayer:
     def __init__(self, root):
@@ -28,6 +30,9 @@ class MusicPlayer:
         self.last_index = tk.IntVar()
 
         self.skip_pressed = False
+        self.keyboard_thread_started = False
+        self.is_paused = False
+        self.listener_active = False
 
         self.create_ui()
         self.load_config()
@@ -121,7 +126,9 @@ class MusicPlayer:
                 for key, value in config.items():
                     file.write(f"{key}={value}\n")
             self.load_standart_playlist(config['standart_path'])        
-            return config  
+            return config
+        except ValueError as e:
+            self.print_to_console(f'Exception while trying to load config: {e}')  
 
     def load_standart_playlist(self, standart_path):
         directory = standart_path
@@ -156,14 +163,19 @@ class MusicPlayer:
             self.check_music_end()
 
     def play_track(self, track):
-        pygame.mixer.music.load(track)
-        pygame.mixer.music.set_volume(self.volume.get())
-        pygame.mixer.music.play()
-        self.current_track.set("Now Playing: " + os.path.basename(track))
-        self.track_length.set(int(MP3(track).info.length))
-        self.current_time.set(0)
-        self.progress_bar["maximum"] = self.track_length.get()
-        self.last_index = self.playlist_listbox.curselection()
+        try:
+            pygame.mixer.music.load(track)
+            pygame.mixer.music.set_volume(self.volume.get())
+            pygame.mixer.music.play()
+            self.current_track.set("Now Playing: " + os.path.basename(track))
+            self.track_length.set(int(MP3(track).info.length))
+            self.current_time.set(0)
+            self.progress_bar["maximum"] = self.track_length.get()
+            self.last_index = self.playlist_listbox.curselection()
+            self.is_paused = False
+            self.start_keyboard_thread() 
+        except Exception as e:
+            self.print_to_console(f'Error while opening file: {e}')   
 
     def start(self):
         if self.playlist:
@@ -179,7 +191,37 @@ class MusicPlayer:
         self.console_text.configure(state="normal")
         self.console_text.insert(0.0, message + "\n")
         self.console_text.see(0.0)
-        self.console_text.configure(state="disabled")        
+        self.console_text.configure(state="disabled")
+
+    def start_keyboard_thread(self):
+        if not self.keyboard_thread_started:
+            self.keyboard_thread = threading.Thread(target=self.keyboard_listener)
+            self.keyboard_thread.start()
+            self.keyboard_thread_started = True
+
+    def on_key_event(self, e):
+        try:
+            if self.root.winfo_ismapped():
+                if e.event_type == keyboard.KEY_DOWN and e.name == "space":
+                    if pygame.mixer.music.get_busy and not self.is_paused:
+                        self.root.focus_set()
+                        self.pause()
+                    elif pygame.mixer.music.get_busy and self.is_paused:
+                        self.root.focus_set()
+                        self.play()
+                        self.is_paused = False  
+        except Exception as e:
+            self.print_to_console(f'Space key listener error: {e}')    
+
+    def keyboard_listener(self):
+        try:
+            while self.root.winfo_exists():
+                print("debug")
+                if not self.listener_active:
+                    keyboard.hook(self.on_key_event)
+                    keyboard.wait()
+                    self.listener_active = True     
+        except Exception as e: self.print_to_console(f'Space key thread error: {e}')                              
 
     # Time Entry Function (dev)
 
@@ -191,6 +233,7 @@ class MusicPlayer:
                 self.progress_bar["value"] = input_time
 
                 self.skip_pressed = True
+                self.is_paused = False
                 pygame.mixer.music.set_pos(input_time)
 
                 self.skip_pressed = False
@@ -200,11 +243,12 @@ class MusicPlayer:
 
     def play(self):
         pygame.mixer.music.unpause()
-        self.skip_pressed = False      
+        self.skip_pressed = False  
 
     def pause(self):
         self.skip_pressed = True
-        pygame.mixer.music.pause()     
+        pygame.mixer.music.pause()
+        self.is_paused = True   
 
     def stop(self):
         pygame.mixer.music.stop()
@@ -252,14 +296,16 @@ class MusicPlayer:
             self.root.after(100, lambda: self.set_selection(next_index))
             self.check_music_end()
         self.skip_pressed = False
+        self.is_paused = False
 
     def set_selection(self, index):
        self.playlist_listbox.selection_clear(0, tk.END)
        self.playlist_listbox.selection_set(index)
-       self.playlist_listbox.see(index)        
+       self.playlist_listbox.see(index)      
 
 
 if __name__ == "__main__":
     root = tk.Tk()
     app = MusicPlayer(root)
     root.mainloop()
+    
