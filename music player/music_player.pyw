@@ -220,7 +220,8 @@ class MusicPlayer:
                 if not self.listener_active:
                     keyboard.hook(self.on_key_event)
                     keyboard.wait()
-                    self.listener_active = True     
+                    self.listener_active = True
+                    #TODO Stop Thread
         except Exception as e: self.print_to_console(f'Space key thread error: {e}')                              
 
     # Time Entry Function (dev)
