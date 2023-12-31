@@ -216,7 +216,6 @@ class MusicPlayer:
     def keyboard_listener(self):
         try:
             while self.root.winfo_exists():
-                print("debug")
                 if not self.listener_active:
                     keyboard.hook(self.on_key_event)
                     keyboard.wait()
