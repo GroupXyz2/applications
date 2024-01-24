@@ -7,11 +7,15 @@ from tkinter import ttk
 import keyboard
 import threading
 import time
+import sys
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
 config_path = os.path.join(script_directory, 'config.txt')
+theme_path = os.path.join(script_directory, 'Azure_Theme', 'azure.tcl')
 icon_path = os.path.join(script_directory, 'icon.ico')
-version = "V1.4.5"
+standard_theme = "azure"
+standard_mode = "dark"
+version = "V1.5"
 
 class MusicPlayer:
     def __init__(self, root):
@@ -20,7 +24,7 @@ class MusicPlayer:
         self.root.geometry("750x500")
 
         if os.path.isfile(icon_path):
-            root.iconbitmap(icon_path)
+            root.iconbitmap(icon_path)    
 
         self.playlist = []
         self.current_track = tk.StringVar()
@@ -33,11 +37,20 @@ class MusicPlayer:
         self.keyboard_thread_started = False
         self.is_paused = False
         self.listener_active = False
+        self.azure_theme_initialized = False
 
         self.create_ui()
         self.load_config()
         pygame.mixer.init()
-        self.print_to_console("Info: Currently only accepts mp3 Files! Programmed with love by GroupXyz :D")
+        self.print_to_console("Info: Currently only accepts mp3 Files, Programmed by GroupXyz")
+
+        # Apply Theme
+        if standard_theme == "azure":
+            self.root.option_add('*Listbox.Foreground', '#FFFFFF')
+            if standard_mode == "light":
+                self.azure_light_mode()
+            elif standard_mode == "dark":
+                self.azure_dark_mode()    
 
     def create_ui(self):
          # Track Info
@@ -66,6 +79,10 @@ class MusicPlayer:
         self.time_entry = ttk.Entry(controls_frame)
         ttk.Button(controls_frame, text="Skip to time ->", command=self.set_time_from_entry).grid(row=0, column=4, padx=10)
         self.time_entry.grid(row=0, column=5, padx=10)
+
+        # Light/Dark Mode
+        ttk.Button(controls_frame, text="Dark Mode", command=self.azure_dark_mode).grid(row=0, column=6, padx=10)
+        ttk.Button(controls_frame, text="Light Mode", command=self.azure_light_mode).grid(row=0, column=7, padx=10)
 
         # Volume Slider
         volume_frame = tk.Frame(self.root)
@@ -120,7 +137,7 @@ class MusicPlayer:
         except FileNotFoundError:
             self.print_to_console('Created new config file: ' + config_path)
             config = {
-                'standart_path': script_directory + '\\songs'
+                'standart_path': script_directory + '\\songs' 
             }
             with open(config_path,'w') as file:
                 for key, value in config.items():
@@ -216,11 +233,12 @@ class MusicPlayer:
     def keyboard_listener(self):
         try:
             while self.root.winfo_exists():
+                print("debug")
                 if not self.listener_active:
                     keyboard.hook(self.on_key_event)
                     keyboard.wait()
                     self.listener_active = True
-                    #TODO Stop Thread
+                    #TODO Stop Thread     
         except Exception as e: self.print_to_console(f'Space key thread error: {e}')                              
 
     # Time Entry Function (dev)
@@ -301,7 +319,28 @@ class MusicPlayer:
     def set_selection(self, index):
        self.playlist_listbox.selection_clear(0, tk.END)
        self.playlist_listbox.selection_set(index)
-       self.playlist_listbox.see(index)      
+       self.playlist_listbox.see(index)
+
+    def azure_dark_mode(self):
+        try:
+            if self.azure_theme_initialized == False:
+                self.azure_theme_initialized = True
+                self.root.tk.call("source", os.path.join(theme_path))
+            self.root.tk.call("set_theme", "dark")
+            self.playlist_listbox.configure(bg="gray", selectbackground="#6b6c6d", selectforeground="black")
+            self.root.option_add('*Listbox.Foreground', '#FFFFFF')
+        except Exception as e:
+            self.print_to_console(f'Error loading azure Theme: {e}')    
+
+    def azure_light_mode(self):
+        try:
+            if self.azure_theme_initialized == False:
+                self.azure_theme_initialized = True
+                self.root.tk.call("source", os.path.join(theme_path))
+            self.root.tk.call("set_theme", "light")
+            self.playlist_listbox.configure(bg="lightgray", selectbackground="gray")
+        except Exception as e:
+            self.print_to_console(f'Error loading azure Theme: {e}')  
 
 
 if __name__ == "__main__":
