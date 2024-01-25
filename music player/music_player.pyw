@@ -11,17 +11,21 @@ import sys
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
 config_path = os.path.join(script_directory, 'config.txt')
-theme_path = os.path.join(script_directory, 'Azure_Theme', 'azure.tcl')
+azure_theme_path = os.path.join(script_directory, 'Azure_Theme', 'azure.tcl')
+forest_theme_light_path = os.path.join(script_directory, 'Forest_Theme', 'forest-light.tcl')
+forest_theme_dark_path = os.path.join(script_directory, 'Forest_Theme', 'forest-dark.tcl')
 icon_path = os.path.join(script_directory, 'icon.ico')
-standard_theme = "azure"
-standard_mode = "dark"
-version = "V1.5"
+standart_theme = "Azure"
+standart_mode = "Dark"
+version = "V1.6"
 
 class MusicPlayer:
     def __init__(self, root):
         self.root = root
         self.root.title("Music Player " + version)
         self.root.geometry("750x500")
+
+        self.style = ttk.Style(root)
 
         if os.path.isfile(icon_path):
             root.iconbitmap(icon_path)    
@@ -38,19 +42,13 @@ class MusicPlayer:
         self.is_paused = False
         self.listener_active = False
         self.azure_theme_initialized = False
+        self.forest_theme_light_initialized = False
+        self.forest_theme_dark_initialized = False
 
         self.create_ui()
         self.load_config()
         pygame.mixer.init()
-        self.print_to_console("Info: Currently only accepts mp3 Files, Programmed by GroupXyz")
-
-        # Apply Theme
-        if standard_theme == "azure":
-            self.root.option_add('*Listbox.Foreground', '#FFFFFF')
-            if standard_mode == "light":
-                self.azure_light_mode()
-            elif standard_mode == "dark":
-                self.azure_dark_mode()    
+        self.print_to_console("Info: Currently only accepts mp3 Files, Programmed by GroupXyz")           
 
     def create_ui(self):
          # Track Info
@@ -80,9 +78,24 @@ class MusicPlayer:
         ttk.Button(controls_frame, text="Skip to time ->", command=self.set_time_from_entry).grid(row=0, column=4, padx=10)
         self.time_entry.grid(row=0, column=5, padx=10)
 
-        # Light/Dark Mode
-        ttk.Button(controls_frame, text="Dark Mode", command=self.azure_dark_mode).grid(row=0, column=6, padx=10)
-        ttk.Button(controls_frame, text="Light Mode", command=self.azure_light_mode).grid(row=0, column=7, padx=10)
+        # Themes and Modes
+
+        appearance_frame = tk.Frame(self.root)
+        appearance_frame.pack(pady=10)
+
+        self.selected_theme = tk.StringVar()
+        theme_label = tk.Label(appearance_frame, text="Theme:")
+        theme_label.grid(row=0, column=0, padx=10)
+        self.theme_box = ttk.Combobox(appearance_frame, textvariable=self.selected_theme, values=["Azure", "Forest"])
+        self.theme_box.set(standart_theme)
+        self.theme_box.grid(row=0, column=1, padx=10)
+
+        self.selected_mode = tk.StringVar()
+        mode_label = tk.Label(appearance_frame, text="Mode:")
+        mode_label.grid(row=0, column=2, padx=10)
+        self.mode_box = ttk.Combobox(appearance_frame, textvariable=self.selected_mode, values=["Dark", "Light"])
+        self.mode_box.set(standart_mode)
+        self.mode_box.grid(row=0, column=3, padx=10)
 
         # Volume Slider
         volume_frame = tk.Frame(self.root)
@@ -121,6 +134,11 @@ class MusicPlayer:
         # self.time_slider.grid(row=0, column=1, padx=10)
 
         self.playlist_listbox.bind("<Double-1>", self.play_selected_track)
+
+        self.theme_box.bind("<<ComboboxSelected>>", lambda event: self.change_mode())
+        self.mode_box.bind("<<ComboboxSelected>>", lambda event: self.change_mode())
+
+        self.change_mode()
 
         self.root.after(1000, self.update_ui)
 
@@ -320,14 +338,32 @@ class MusicPlayer:
        self.playlist_listbox.selection_set(index)
        self.playlist_listbox.see(index)
 
+    def change_mode(self):
+        try:
+            theme = self.selected_theme.get()
+            mode = self.selected_mode.get()
+            if theme == "Forest":
+                if mode == "Dark":
+                    self.forest_dark_mode()
+                elif mode == "Light":
+                    self.forest_light_mode()
+            elif theme == "Azure":
+                if mode == "Dark":
+                    self.azure_dark_mode()
+                elif mode == "Light":
+                    self.azure_light_mode()                       
+        except Exception as e:
+            self.print_to_console(f'Error changing Mode/Theme: {e}')                      
+
+
     def azure_dark_mode(self):
         try:
             if self.azure_theme_initialized == False:
                 self.azure_theme_initialized = True
-                self.root.tk.call("source", os.path.join(theme_path))
+                self.root.tk.call("source", os.path.join(azure_theme_path))
             self.root.tk.call("set_theme", "dark")
             self.playlist_listbox.configure(bg="gray", selectbackground="#6b6c6d", selectforeground="black")
-            self.root.option_add('*Listbox.Foreground', '#FFFFFF')
+            self.mode_box.configure(state="enabled")
         except Exception as e:
             self.print_to_console(f'Error loading azure Theme: {e}')    
 
@@ -335,12 +371,34 @@ class MusicPlayer:
         try:
             if self.azure_theme_initialized == False:
                 self.azure_theme_initialized = True
-                self.root.tk.call("source", os.path.join(theme_path))
+                self.root.tk.call("source", os.path.join(azure_theme_path))
             self.root.tk.call("set_theme", "light")
             self.playlist_listbox.configure(bg="lightgray", selectbackground="gray")
+            self.mode_box.configure(state="enabled")
         except Exception as e:
-            self.print_to_console(f'Error loading azure Theme: {e}')  
+            self.print_to_console(f'Error loading azure Theme: {e}')
 
+    def forest_dark_mode(self):
+        try:
+            if self.forest_theme_dark_initialized == False:
+                self.forest_theme_dark_initialized = True
+                self.root.tk.call("source", os.path.join(forest_theme_dark_path))#
+            self.style.theme_use("forest-dark")
+            self.playlist_listbox.configure(bg="gray", selectbackground="#6b6c6d", selectforeground="black")
+            self.mode_box.configure(state="disabled")
+        except Exception as e:
+            self.print_to_console(f'Error loading forest Theme: {e}')
+
+    def forest_light_mode(self):
+        try:
+            if self.forest_theme_light_initialized == False:
+                self.forest_theme_light_initialized = True
+                self.root.tk.call("source", os.path.join(forest_theme_light_path))
+            self.style.theme_use("forest-light")
+            self.playlist_listbox.configure(bg="lightgray", selectbackground="gray")
+            self.mode_box.configure(state="disabled")
+        except Exception as e:
+            self.print_to_console(f'Error loading forest Theme: {e}')          
 
 if __name__ == "__main__":
     root = tk.Tk()
