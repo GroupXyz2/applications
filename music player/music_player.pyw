@@ -7,14 +7,23 @@ from tkinter import ttk
 import keyboard
 import threading
 import time
+from pypresence import Presence
+import pypresence
 import sys
+import urllib.parse
+import webbrowser
+import winreg as reg
+import platform
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
 config_path = os.path.join(script_directory, 'config.txt')
 azure_theme_path = os.path.join(script_directory, 'Azure_Theme', 'azure.tcl')
 forest_theme_light_path = os.path.join(script_directory, 'Forest_Theme', 'forest-light.tcl')
 forest_theme_dark_path = os.path.join(script_directory, 'Forest_Theme', 'forest-dark.tcl')
+valorant_theme_light_path = os.path.join(script_directory, 'Valorant_Theme', 'valorant-light.tcl')
+valorant_theme_dark_path = os.path.join(script_directory, 'Valorant_Theme', 'valorant-dark.tcl')
 icon_path = os.path.join(script_directory, 'icon.ico')
+discord_application_id = "1266010137139744952"
 standart_theme = "Azure"
 standart_mode = "Dark"
 version = "V1.6"
@@ -36,6 +45,7 @@ class MusicPlayer:
         self.current_time = tk.IntVar()
         self.volume = tk.DoubleVar()
         self.last_index = tk.IntVar()
+        self.spacepause_enabled = tk.BooleanVar()
 
         self.skip_pressed = False
         self.keyboard_thread_started = False
@@ -44,11 +54,17 @@ class MusicPlayer:
         self.azure_theme_initialized = False
         self.forest_theme_light_initialized = False
         self.forest_theme_dark_initialized = False
+        self.valorant_theme_light_initialized = False
+        self.valorant_theme_dark_initialized = False
+        self.is_closing = False
 
         self.create_ui()
         self.load_config()
         pygame.mixer.init()
-        self.print_to_console("Info: Currently only accepts mp3 Files, Programmed by GroupXyz")           
+        self.print_to_console("Info: Currently only accepts mp3 Files, Programmed by GroupXyz")
+
+        if len(sys.argv) > 1:
+            self.handle_custom_url(sys.argv[1])               
 
     def create_ui(self):
          # Track Info
@@ -97,6 +113,9 @@ class MusicPlayer:
         self.mode_box.set(standart_mode)
         self.mode_box.grid(row=0, column=3, padx=10)
 
+        self.pause_checkbutton = ttk.Checkbutton(appearance_frame, text="Pause with Spacebar", variable=self.spacepause_enabled)
+        self.pause_checkbutton.grid(row=0, column=5, padx=10)
+
         # Volume Slider
         volume_frame = tk.Frame(self.root)
         volume_frame.pack(pady=10)
@@ -141,6 +160,12 @@ class MusicPlayer:
         self.change_mode()
 
         self.root.after(1000, self.update_ui)
+
+        try:
+            self.rpc = Presence(discord_application_id)
+            self.rpc.connect()
+        except Exception as e:
+            self.print_to_console(f'Error connecting Discord rich presence: {e}')       
 
     def load_config(self):
         try:
@@ -195,7 +220,7 @@ class MusicPlayer:
         if selected_index:
             selected_track = self.playlist[selected_index[0]]
             self.play_track(selected_track)
-            self.check_music_end()
+            self.check_music_end() 
 
     def play_track(self, track):
         try:
@@ -208,7 +233,8 @@ class MusicPlayer:
             self.progress_bar["maximum"] = self.track_length.get()
             self.last_index = self.playlist_listbox.curselection()
             self.is_paused = False
-            self.start_keyboard_thread() 
+            self.start_keyboard_thread()
+            self.discord_rich_presence(track)  
         except Exception as e:
             self.print_to_console(f'Error while opening file: {e}')   
 
@@ -238,13 +264,15 @@ class MusicPlayer:
         try:
             if self.root.winfo_ismapped():
                 if e.event_type == keyboard.KEY_DOWN and e.name == "space":
-                    if pygame.mixer.music.get_busy and not self.is_paused:
-                        self.root.focus_set()
-                        self.pause()
-                    elif pygame.mixer.music.get_busy and self.is_paused:
-                        self.root.focus_set()
-                        self.play()
-                        self.is_paused = False  
+                    if self.spacepause_enabled.get():
+                        self.pause_checkbutton.configure(state="disabled")
+                        if pygame.mixer.music.get_busy and not self.is_paused:
+                                self.root.focus_set()
+                                self.pause()
+                        elif pygame.mixer.music.get_busy and self.is_paused:
+                                self.root.focus_set()
+                                self.play()
+                                self.is_paused = False
         except Exception as e:
             self.print_to_console(f'Space key listener error: {e}')    
 
@@ -351,7 +379,7 @@ class MusicPlayer:
                 if mode == "Dark":
                     self.azure_dark_mode()
                 elif mode == "Light":
-                    self.azure_light_mode()                       
+                    self.azure_light_mode()                      
         except Exception as e:
             self.print_to_console(f'Error changing Mode/Theme: {e}')                      
 
@@ -398,10 +426,109 @@ class MusicPlayer:
             self.playlist_listbox.configure(bg="lightgray", selectbackground="gray")
             self.mode_box.configure(state="disabled")
         except Exception as e:
-            self.print_to_console(f'Error loading forest Theme: {e}')          
+            self.print_to_console(f'Error loading forest Theme: {e}')
+
+    def discord_rich_presence(self, track):
+        try:
+            self.song_files = []
+            self.current_song_length = pygame.mixer.music.get_pos()
+            song_name = os.path.basename(track)
+            self.rpc.connect()
+            self.rpc.update(
+                    details=f"Listening to PyPlayer",
+                    state=f"Playing: {song_name}",
+                    large_image=icon_path,
+                    large_text="PyPlayerByGroupXyz",
+                    #start = int(self.current_time),
+                    #end = int(self.current_song_length),
+                    buttons=[
+                        {"label": "PyPlayer", "url": "https://github.com/GroupXyz2/applications/tree/main/music%20player"}
+                    ]
+                )
+        except Exception as e:
+            self.print_to_console(f'Error loading Discord rich presence: {e}')
+
+    def handle_custom_url(self, url):
+        try:
+            parsed_url = urllib.parse.urlparse(url)
+            
+            if parsed_url.scheme == "play":
+                song_name = parsed_url.netloc
+                
+                if song_name:
+                    self.play_track_by_name(song_name)
+                else:
+                    self.print_to_console("Error: Song name is empty or invalid.")
+            else:
+                self.print_to_console(f"Error: URL scheme is not 'play'. Found scheme: '{parsed_url.scheme}'")
+        except Exception as e:
+            self.print_to_console(f"Error handling custom URL: {e}")
+
+
+
+    def play_track_by_name(self, song_name):
+        try:
+            song_name = os.path.basename(song_name).strip().lower()
+            song_name = song_name.replace(' ', '_')
+            song_name = song_name.replace('%20', '_')
+            self.print_to_console(f"Searching for song: '{song_name}'")
+            
+            found = False
+            if (song_name != ""):
+                for index, track in enumerate(self.playlist):
+                    track_name = os.path.basename(track).strip().lower()
+                    track_name = track_name.replace(' ', '_')
+                    track_name = track_name.replace('%20', '_')
+                    #self.print_to_console(f"Checking track {index}: '{track_name}'")
+                    
+                    if song_name in track_name:
+                        self.play_track(track)
+                        self.playlist_listbox.selection_set(index)
+                        found = True
+                        break
+                    
+            if not found:
+                self.print_to_console(f"Song '{song_name}' not found in playlist.")
+        except Exception as e:
+            self.print_to_console(f"Error playing track: {e}")                    
+
+                                                                
+
 
 if __name__ == "__main__":
+
+    def protocol_exists(protocol_name):
+        try:
+            key = reg.OpenKey(reg.HKEY_CLASSES_ROOT, protocol_name, 0, reg.KEY_READ)
+            reg.CloseKey(key)
+            return True
+        except FileNotFoundError:
+            return False
+
+    def register_protocol():
+
+            protocol_name = "play"
+            if not protocol_exists(protocol_name):
+                executable_path = os.path.abspath(sys.argv[0])
+
+                key = reg.HKEY_CLASSES_ROOT
+                key_value = protocol_name
+
+                key = reg.CreateKey(key, key_value)
+                reg.SetValue(key, '', reg.REG_SZ, 'URL:Play Protocol')
+                reg.SetValueEx(key, 'URL Protocol', 0, reg.REG_SZ, '')
+
+                key = reg.CreateKey(key, r'shell\open\command')
+                reg.SetValue(key, '', reg.REG_SZ, f'"{executable_path}" "%1"')            
+   
+    if (platform.system() == "Windows"):
+        register_protocol()         
+
     root = tk.Tk()
     app = MusicPlayer(root)
+
     root.mainloop()
+
+    
+
     
