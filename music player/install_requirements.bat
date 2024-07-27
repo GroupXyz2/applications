@@ -6,5 +6,6 @@ echo INFO: if you DONT see the version above you have not installed python and n
 pip install pygame
 pip install mutagen
 pip install keyboard
+pip install pypresence
 
 pause
