@@ -50,7 +50,7 @@ class FFmpegConverter:
         try:
             messagebox.showinfo("Info", "FFmpeg not found, trying to install, please wait!")
             subprocess.run(['winget', 'install', 'ffmpeg'], check=True)
-            messagebox.showinfo("Info", "FFmpeg was successfully installed.")
+            messagebox.showinfo("Info", "FFmpeg was successfully installed, if it doesn't work yet, please restart once.")
         except subprocess.CalledProcessError:
             result = messagebox.askyesno("FFmpeg not found", "FFmpeg could not be installed automatically. "
                                                             "Would you like to visit the download page?")
