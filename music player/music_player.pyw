@@ -12,7 +12,7 @@ import pypresence
 import sys
 import urllib.parse
 import webbrowser
-import winreg as reg
+#import winreg as reg #BROKEN
 import platform
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
@@ -519,8 +519,8 @@ if __name__ == "__main__":
                 key = reg.CreateKey(key, r'shell\open\command')
                 reg.SetValue(key, '', reg.REG_SZ, f'"{executable_path}" "%1"')            
    
-    if (platform.system() == "Windows"):
-        register_protocol()         
+    #if (platform.system() == "Windows"):
+        #register_protocol()         
 
     root = tk.Tk()
     app = MusicPlayer(root)
