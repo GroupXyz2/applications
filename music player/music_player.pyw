@@ -34,7 +34,7 @@ class MusicPlayer:
 
         self.style = ttk.Style(root)
 
-        if os.path.isfile(icon_path):
+        if os.path.isfile(icon_path) and platform.system() == "windows":
             root.iconbitmap(icon_path)    
 
         self.playlist = []
