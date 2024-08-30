@@ -7,5 +7,6 @@ pip install pygame
 pip install mutagen
 pip install keyboard
 pip install pypresence
+pip install winregistry
 
 pause
