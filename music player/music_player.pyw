@@ -12,19 +12,24 @@ import pypresence
 import sys
 import urllib.parse
 import webbrowser
-#import winreg as reg #BROKEN
+import winreg as reg
 import platform
+import subprocess
+from tkinter import messagebox
+from tkinter import simpledialog
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
 config_path = os.path.join(script_directory, 'config.txt')
 azure_theme_path = os.path.join(script_directory, 'Azure_Theme', 'azure.tcl')
 forest_theme_light_path = os.path.join(script_directory, 'Forest_Theme', 'forest-light.tcl')
 forest_theme_dark_path = os.path.join(script_directory, 'Forest_Theme', 'forest-dark.tcl')
+valorant_theme_light_path = os.path.join(script_directory, 'Valorant_Theme', 'valorant-light.tcl')
+valorant_theme_dark_path = os.path.join(script_directory, 'Valorant_Theme', 'valorant-dark.tcl')
 icon_path = os.path.join(script_directory, 'icon.ico')
 discord_application_id = "1266010137139744952"
 standart_theme = "Azure"
 standart_mode = "Dark"
-version = "V1.6"
+version = "V1.7"
 
 class MusicPlayer:
     def __init__(self, root):
@@ -34,7 +39,7 @@ class MusicPlayer:
 
         self.style = ttk.Style(root)
 
-        if os.path.isfile(icon_path) and platform.system() == "windows": #Broken on Linux
+        if os.path.isfile(icon_path):
             root.iconbitmap(icon_path)    
 
         self.playlist = []
@@ -57,7 +62,7 @@ class MusicPlayer:
         self.is_closing = False
 
         self.create_ui()
-        self.load_config()
+        self.config = self.load_config()
         pygame.mixer.init()
         self.print_to_console("Info: Currently only accepts mp3 Files, Programmed by GroupXyz")
 
@@ -74,8 +79,10 @@ class MusicPlayer:
         # Playlist Listbox
         self.playlist_listbox = tk.Listbox(self.root, selectmode=tk.SINGLE, bg="lightgray", selectbackground="gray")
         self.playlist_listbox.pack(pady=10, fill=tk.BOTH, expand=True)
-        self.load_button = ttk.Button(self.root, text="Load Playlist (Folder with mp3 Files)", command=self.load_playlist)
-        self.load_button.pack()
+        load_frame = tk.Frame(self.root)
+        load_frame.pack()
+        ttk.Button(load_frame, text="Load Playlist (Folder with mp3 Files)", command=self.load_playlist).grid(row=0, column=0, padx=10)
+        ttk.Button(load_frame, text="Download Song (Spotify URL)", command=self.download_song).grid(row=0, column=1, padx=10)
 
         # Controls Frame
         controls_frame = tk.Frame(self.root)
@@ -100,7 +107,7 @@ class MusicPlayer:
         self.selected_theme = tk.StringVar()
         theme_label = tk.Label(appearance_frame, text="Theme:")
         theme_label.grid(row=0, column=0, padx=10)
-        self.theme_box = ttk.Combobox(appearance_frame, textvariable=self.selected_theme, values=["Azure", "Forest"])
+        self.theme_box = ttk.Combobox(appearance_frame, textvariable=self.selected_theme, values=["Azure", "Forest", "Valorant"])
         self.theme_box.set(standart_theme)
         self.theme_box.grid(row=0, column=1, padx=10)
 
@@ -159,11 +166,16 @@ class MusicPlayer:
 
         self.root.after(1000, self.update_ui)
 
+        discord_thread = threading.Thread(target=self.setup_discord_rpc)
+        discord_thread.start()
+
+    def setup_discord_rpc(self):
         try:
             self.rpc = Presence(discord_application_id)
             self.rpc.connect()
+            self.print_to_console("Discord Rich Presence connected.")
         except Exception as e:
-            self.print_to_console(f'Error connecting Discord rich presence: {e}')       
+            self.print_to_console(f'Error connecting Discord rich presence: {e}')                 
 
     def load_config(self):
         try:
@@ -309,10 +321,13 @@ class MusicPlayer:
     def pause(self):
         self.skip_pressed = True
         pygame.mixer.music.pause()
+        if (self.rpc):
+            self.rpc.clear()
         self.is_paused = True   
 
     def stop(self):
         pygame.mixer.music.stop()
+        self.rpc.clear()
 
     def set_volume(self, *args):
         try:
@@ -377,7 +392,12 @@ class MusicPlayer:
                 if mode == "Dark":
                     self.azure_dark_mode()
                 elif mode == "Light":
-                    self.azure_light_mode()                      
+                    self.azure_light_mode()
+            elif theme == "Valorant":
+                if mode == "Light":
+                    self.valorant_light_mode()
+                elif mode == "Dark":
+                    self.valorant_dark_mode()                        
         except Exception as e:
             self.print_to_console(f'Error changing Mode/Theme: {e}')                      
 
@@ -426,12 +446,34 @@ class MusicPlayer:
         except Exception as e:
             self.print_to_console(f'Error loading forest Theme: {e}')
 
+    def valorant_dark_mode(self):
+        try:
+            if self.valorant_theme_dark_initialized == False:
+                self.valorant_theme_dark_initialized = True
+                self.root.tk.call("source", os.path.join(valorant_theme_dark_path))
+            self.style.theme_use("valorant-dark")
+            self.playlist_listbox.configure(bg="gray", selectbackground="#6b6c6d", selectforeground="black")
+            self.mode_box.configure(state="disabled")
+        except Exception as e:
+            self.print_to_console(f'Error loading valorant Theme: {e}')    
+
+    def valorant_light_mode(self):
+        try:
+            if self.valorant_theme_light_initialized == False:
+                self.valorant_theme_light_initialized = True
+                self.root.tk.call("source", os.path.join(valorant_theme_light_path))
+            self.style.theme_use("valorant-light")
+            self.playlist_listbox.configure(bg="lightgray", selectbackground="gray")
+            self.mode_box.configure(state="disabled")
+        except Exception as e:
+            self.print_to_console(f'Error loading valorant Theme: {e}')
+
     def discord_rich_presence(self, track):
         try:
             self.song_files = []
             self.current_song_length = pygame.mixer.music.get_pos()
             song_name = os.path.basename(track)
-            self.rpc.connect()
+            self.rpc.clear
             self.rpc.update(
                     details=f"Listening to PyPlayer",
                     state=f"Playing: {song_name}",
@@ -488,10 +530,62 @@ class MusicPlayer:
             if not found:
                 self.print_to_console(f"Song '{song_name}' not found in playlist.")
         except Exception as e:
-            self.print_to_console(f"Error playing track: {e}")                    
+            self.print_to_console(f"Error playing track: {e}")
 
-                                                                
+    def run_as_admin(self, command):
+        try:
+            if os.name == "nt":
+                subprocess.run(["powershell", "-Command", f"Start-Process cmd -ArgumentList '/c {command}' -Verb RunAs"], check=True)
+            else:
+                subprocess.run(["sudo"] + command.split(), check=True)
+        except subprocess.CalledProcessError:
+            raise Exception("Administratorrechte benötigt, Installation fehlgeschlagen.")
 
+    def check_and_install_spotdl(self):
+        try:
+            subprocess.run(["spotdl", "--version"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as e:
+            try:
+                command = "pip install spotdl"
+                messagebox.showinfo("Info", "spotdl wird installiert, bitte erlaubte erhöhte Rechte!")
+                self.run_as_admin(command)
+                #subprocess.run(command.split(), check=True)
+                messagebox.showinfo("Info", "spotdl wurde erfolgreich installiert.")
+            except subprocess.CalledProcessError:
+                messagebox.showerror("Fehler", "Fehler beim Installieren von spotdl. Bitte manuell installieren.")
+                return False
+            except Exception as e:
+                messagebox.showerror("Fehler", f"Fehler beim Installieren von spotdl: {e}")
+                return False
+        return True
+
+    def download_song(self):
+        if not self.check_and_install_spotdl():
+            return
+
+        self.print_to_console("FYI: The player won't respond while downloading, please be patient!")    
+        song_url = simpledialog.askstring("Download Song", "Bitte gib eine gültige Spotify-URL ein.")
+        if not song_url.strip():
+            messagebox.showerror("Fehler", "Bitte gib eine gültige Spotify-URL ein.")
+            return
+
+        try:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            output_dir = self.config['standart_path'] #os.path.join(script_dir, "songs")
+            self.print_to_console(f"Output directory: {output_dir}")
+            if (not os.path.exists(output_dir)):
+                os.makedirs(output_dir)
+            os.chdir(output_dir)
+
+            command = ["spotdl", song_url]
+            subprocess.run(command, check=True)
+            self.print_to_console("Song wurde erfolgreich heruntergeladen!")
+            self.load_standart_playlist(output_dir)
+        except subprocess.CalledProcessError:
+            messagebox.showerror("Fehler", "Fehler beim Herunterladen des Songs. Bitte überprüfe die URL und versuche es erneut.")
+        except Exception as e:
+            #messagebox.showerror("Fehler", f"Ein unerwarteter Fehler ist aufgetreten: {e}") 
+            ""                                                                                         
 
 if __name__ == "__main__":
 
@@ -504,29 +598,29 @@ if __name__ == "__main__":
             return False
 
     def register_protocol():
-
-            protocol_name = "play"
-            if not protocol_exists(protocol_name):
+        protocol_name = "play"
+        if not protocol_exists(protocol_name):
+            try:
                 executable_path = os.path.abspath(sys.argv[0])
 
-                key = reg.HKEY_CLASSES_ROOT
-                key_value = protocol_name
+                with reg.CreateKey(reg.HKEY_CLASSES_ROOT, protocol_name) as protocol_key:
+                    reg.SetValue(protocol_key, '', reg.REG_SZ, 'URL:Play Protocol')
+                    reg.SetValueEx(protocol_key, 'URL Protocol', 0, reg.REG_SZ, '')
 
-                key = reg.CreateKey(key, key_value)
-                reg.SetValue(key, '', reg.REG_SZ, 'URL:Play Protocol')
-                reg.SetValueEx(key, 'URL Protocol', 0, reg.REG_SZ, '')
+                    command_path = r'shell\open\command'
+                    with reg.CreateKey(protocol_key, command_path) as command_key:
+                        reg.SetValue(command_key, '', reg.REG_SZ, f'pythonw "{executable_path}" "%1"')
 
-                key = reg.CreateKey(key, r'shell\open\command')
-                reg.SetValue(key, '', reg.REG_SZ, f'"{executable_path}" "%1"')            
+                print(f"Protocol '{protocol_name}' registered successfully.")
+            except Exception as e:
+                print(f"Exception while trying to register protocol: {e}")  
    
-    #if (platform.system() == "Windows"):
-        #register_protocol()         
+    if (platform.system() == "Windows"):
+        register_protocol()         
 
     root = tk.Tk()
     app = MusicPlayer(root)
 
     root.mainloop()
-
-    
 
     
