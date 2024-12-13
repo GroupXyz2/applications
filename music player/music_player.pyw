@@ -539,7 +539,7 @@ class MusicPlayer:
             else:
                 subprocess.run(["sudo"] + command.split(), check=True)
         except subprocess.CalledProcessError:
-            raise Exception("Administratorrechte benötigt, Installation fehlgeschlagen.")
+            raise Exception("Administrator permissions required, installation failed.")
 
     def check_and_install_spotdl(self):
         try:
@@ -547,15 +547,15 @@ class MusicPlayer:
         except Exception as e:
             try:
                 command = "pip install spotdl"
-                messagebox.showinfo("Info", "spotdl wird installiert, bitte erlaubte erhöhte Rechte!")
+                messagebox.showinfo("Info", "Installing spotdl, please grant administrator rights!")
                 self.run_as_admin(command)
                 #subprocess.run(command.split(), check=True)
-                messagebox.showinfo("Info", "spotdl wurde erfolgreich installiert.")
+                messagebox.showinfo("Info", "spotdl installed succesfully.")
             except subprocess.CalledProcessError:
-                messagebox.showerror("Fehler", "Fehler beim Installieren von spotdl. Bitte manuell installieren.")
+                messagebox.showerror("Error", "Error installing spotdl, please install manually (pip install spotdl).")
                 return False
             except Exception as e:
-                messagebox.showerror("Fehler", f"Fehler beim Installieren von spotdl: {e}")
+                messagebox.showerror("Error", f"Error installing spotdl: {e}")
                 return False
         return True
 
@@ -564,9 +564,9 @@ class MusicPlayer:
             return
 
         self.print_to_console("FYI: The player won't respond while downloading, please be patient!")    
-        song_url = simpledialog.askstring("Download Song", "Bitte gib eine gültige Spotify-URL ein.")
+        song_url = simpledialog.askstring("Download Song", "Pleas enter a valid Spotify-URL.")
         if not song_url.strip():
-            messagebox.showerror("Fehler", "Bitte gib eine gültige Spotify-URL ein.")
+            messagebox.showerror("Error", "Pleas enter a valid Spotify-URL.")
             return
 
         try:
@@ -579,12 +579,14 @@ class MusicPlayer:
 
             command = ["spotdl", song_url]
             subprocess.run(command, check=True)
-            self.print_to_console("Song wurde erfolgreich heruntergeladen!")
+            self.print_to_console("Song downloaded succesfully!")
             self.load_standart_playlist(output_dir)
         except subprocess.CalledProcessError:
-            messagebox.showerror("Fehler", "Fehler beim Herunterladen des Songs. Bitte überprüfe die URL und versuche es erneut.")
+            messagebox.showerror("Error", "Error downloading song, please check the URL and try again.")
         except Exception as e:
-            #messagebox.showerror("Fehler", f"Ein unerwarteter Fehler ist aufgetreten: {e}") 
+            #messagebox.showerror("Error", f"Encountered an unexpected error: {e}") 
+            error = f"{e}"
+            self.print_to_console("Encountered an unexpected error: " + error)
             ""                                                                                         
 
 if __name__ == "__main__":
