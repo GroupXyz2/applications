@@ -1,0 +1,20 @@
+name: Trigger Sync Workflow
+
+on:
+  push:
+    branches:
+      - main  
+    paths:
+      - "**"  
+
+jobs:
+  trigger-sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger `groupxyz2.github.io` sync workflow
+        run: |
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -d '{"event_type": "application-update"}' \
+            https://api.github.com/repos/GroupXyz2/groupxyz2.github.io/dispatches
