@@ -204,7 +204,7 @@
                 if (response.ok) {
                     const filePath = result.file_path;
                     
-                    const fileName = decodeURIComponent(filePath.split('/').pop()); 
+                    const fileName = decodeURIComponent(filePath.split('/').pop().replace(/:/g, '：'));
                     const folderPath = filePath.substring(0, filePath.lastIndexOf('/')); 
 
                     const downloadLink = `https://${server_url}/downloader/${folderPath}/${encodeURIComponent(fileName)}`;
