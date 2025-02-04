@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube/Spotify Downloader by GroupXyz</title>
+    <title>YouTube/Spotify Downloader von GroupXyz</title>
     <style>
         body {
             background-color: #121212;
@@ -157,14 +157,33 @@
     <div id="message"></div>
 
     <div class="disclaimer">
-        Copyright-Note: This website doesn't download directly from Spotify!
+        Copyright-Hinweis: Diese Website lädt Spotify URLs nicht von Spotify runter! FYI: Aus unbekanntem Grund kann man keine gleichen Spotify Songs 2 Mal nacheinander innerhalb von 5min runterladen :/ xD.
     </div>
 
     <footer>
-        &copy; 2025 GroupXyz. Created by GroupXyz.
+        &copy; 2025 GroupXyz. Erstellt von GroupXyz.
     </footer>
 
     <script>
+        async function forceDownload(url, filename) {
+            try {
+                const response = await fetch(url);
+                const blob = await response.blob();
+                const downloadUrl = URL.createObjectURL(blob);
+                
+                const a = document.createElement("a");
+                a.href = downloadUrl;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                
+                URL.revokeObjectURL(downloadUrl);
+            } catch (error) {
+                console.error("Download fehlgeschlagen:", error);
+            }
+        }
+
         document.getElementById("url").addEventListener("input", function(event) {
             const url = event.target.value;
             const formatSelect = document.getElementById("format");
@@ -184,11 +203,11 @@
             const url = document.getElementById("url").value;
             const messageDiv = document.getElementById("message");
             const format = document.getElementById("format").value;
-            const server_url = "example.com";
+            const server_url = "pickaxegaming.de";
             const isSpotify = /(https?:\/\/)?(open\.spotify\.com|spotify:)/.test(url);
             const downloadType = isSpotify ? "Audio" : format === "mp3" ? "Audio" : "Video";
 
-            messageDiv.innerHTML = `<div class="spinner"></div> ${downloadType} is downloading...`;
+            messageDiv.innerHTML = `<div class="spinner"></div> ${downloadType} wird heruntergeladen...`;
 
             try {
                 const response = await fetch(`https://${server_url}:8081/download/`, {
@@ -210,21 +229,18 @@
                     const downloadLink = `https://${server_url}/downloader/${folderPath}/${encodeURIComponent(fileName)}`;
 
                     messageDiv.innerHTML = `
-                        Success: <a href="${downloadLink}" download="${fileName}">${fileName}</a>
+                        Erfolg: <a href="${downloadLink}" download="${fileName}">${fileName}</a>
                         <a href="${downloadLink}" download="${fileName}">
-                            <button>Download</button>
+                            <button onclick="forceDownload('${downloadLink}', '${fileName}')">Herunterladen</button>
                         </a>
                     `;
                 } else {
-                    messageDiv.innerHTML = `Error: ${result.detail}`;
+                    messageDiv.innerHTML = `Fehler: ${result.detail}`;
                 }
             } catch (error) {
-                messageDiv.innerHTML = `Error while downloading ${downloadType}! ${error.message}`;
+                messageDiv.innerHTML = `Fehler beim Herunterladen des ${downloadType}! ${error.message}`;
             }
         });
     </script>
 </body>
 </html>
-
-<!-- Workflow sync test comment -->
-
