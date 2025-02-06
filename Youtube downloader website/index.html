@@ -208,11 +208,15 @@
                     const folderPath = filePath.substring(0, filePath.lastIndexOf('/')); 
 
                     const downloadLink = `https://${server_url}/downloader/${folderPath}/${encodeURIComponent(fileName)}`;
+                    const backupLink = `https://${server_url}/downloader/${folderPath}/`;
 
                     messageDiv.innerHTML = `
                         Success: <a href="${downloadLink}" download="${fileName}">${fileName}</a>
                         <a href="${downloadLink}" download="${fileName}">
                             <button>Download</button>
+                        </a>
+                        <a href="${backupLink}">
+                            <button>Link broken?</button>
                         </a>
                     `;
                 } else {
