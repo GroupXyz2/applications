@@ -87,13 +87,13 @@ async def download_video(request: VideoRequest):
                     'preferredcodec': 'mp3',
                     'preferredquality': '192',
                 }],
-                'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(title)s.%(ext)s'),
+                "outtmpl": os.path.join(DOWNLOAD_FOLDER, "%(title)s.%(ext)s").replace(",", ""),
                 'socket_timeout': 30,
             }
         else:
             ydl_opts = {
                 'format': 'best',
-                'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(title)s.%(ext)s'),
+                "outtmpl": os.path.join(DOWNLOAD_FOLDER, "%(title)s.%(ext)s").replace(",", ""),
                 'socket_timeout': 30,
             }
 
