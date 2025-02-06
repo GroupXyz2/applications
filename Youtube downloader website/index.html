@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube/Spotify Downloader von GroupXyz</title>
+    <title>YouTube/Spotify Downloader by GroupXyz</title>
     <style>
         body {
             background-color: #121212;
@@ -157,33 +157,14 @@
     <div id="message"></div>
 
     <div class="disclaimer">
-        Copyright-Hinweis: Diese Website lädt Spotify URLs nicht von Spotify runter! FYI: Aus unbekanntem Grund kann man keine gleichen Spotify Songs 2 Mal nacheinander innerhalb von 5min runterladen :/ xD.
+        Copyright-Note: This website doesn't download directly from Spotify!
     </div>
 
     <footer>
-        &copy; 2025 GroupXyz. Erstellt von GroupXyz.
+        &copy; 2025 GroupXyz. Created by GroupXyz.
     </footer>
 
     <script>
-        async function forceDownload(url, filename) {
-            try {
-                const response = await fetch(url);
-                const blob = await response.blob();
-                const downloadUrl = URL.createObjectURL(blob);
-                
-                const a = document.createElement("a");
-                a.href = downloadUrl;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                
-                URL.revokeObjectURL(downloadUrl);
-            } catch (error) {
-                console.error("Download fehlgeschlagen:", error);
-            }
-        }
-
         document.getElementById("url").addEventListener("input", function(event) {
             const url = event.target.value;
             const formatSelect = document.getElementById("format");
@@ -203,11 +184,11 @@
             const url = document.getElementById("url").value;
             const messageDiv = document.getElementById("message");
             const format = document.getElementById("format").value;
-            const server_url = "pickaxegaming.de";
+            const server_url = "example.com";
             const isSpotify = /(https?:\/\/)?(open\.spotify\.com|spotify:)/.test(url);
             const downloadType = isSpotify ? "Audio" : format === "mp3" ? "Audio" : "Video";
 
-            messageDiv.innerHTML = `<div class="spinner"></div> ${downloadType} wird heruntergeladen...`;
+            messageDiv.innerHTML = `<div class="spinner"></div> ${downloadType} is downloading...`;
 
             try {
                 const response = await fetch(`https://${server_url}:8081/download/`, {
@@ -223,22 +204,22 @@
                 if (response.ok) {
                     const filePath = result.file_path;
                     
-                    const fileName = decodeURIComponent(filePath.split('/').pop().replace(/:/g, '：'));
+                    const fileName = decodeURIComponent(filePath.split('/').pop()); 
                     const folderPath = filePath.substring(0, filePath.lastIndexOf('/')); 
 
                     const downloadLink = `https://${server_url}/downloader/${folderPath}/${encodeURIComponent(fileName)}`;
 
                     messageDiv.innerHTML = `
-                        Erfolg: <a href="${downloadLink}" download="${fileName}">${fileName}</a>
+                        Success: <a href="${downloadLink}" download="${fileName}">${fileName}</a>
                         <a href="${downloadLink}" download="${fileName}">
-                            <button onclick="forceDownload('${downloadLink}', '${fileName}')">Herunterladen</button>
+                            <button>Download</button>
                         </a>
                     `;
                 } else {
-                    messageDiv.innerHTML = `Fehler: ${result.detail}`;
+                    messageDiv.innerHTML = `Error: ${result.detail}`;
                 }
             } catch (error) {
-                messageDiv.innerHTML = `Fehler beim Herunterladen des ${downloadType}! ${error.message}`;
+                messageDiv.innerHTML = `Error while downloading ${downloadType}! ${error.message}`;
             }
         });
     </script>
