@@ -205,10 +205,10 @@
                     const filePath = result.file_path;
                     
                     const fileName = decodeURIComponent(filePath.split('/').pop()); 
+                    const folderPath = filePath.substring(0, filePath.lastIndexOf('/')); 
 
-                    const downloadLink = `https://${server_url}:8081/downloads/${encodeURIComponent(fileName)}`;
-                    const backupLink = `https://${server_url}:8081/downloads/`;
-                    const alternateLink = `https://${server_url}:8081/get-file/${encodeURIComponent(fileName)}`;
+                    const downloadLink = `https://${server_url}/downloader/${folderPath}/${encodeURIComponent(fileName)}`;
+                    const backupLink = `https://${server_url}/downloader/${folderPath}/`;
 
                     messageDiv.innerHTML = `
                         Success: <a href="${downloadLink}" download="${fileName}">${fileName}</a>
