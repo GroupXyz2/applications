@@ -157,7 +157,7 @@
     <div id="message"></div>
 
     <div class="disclaimer">
-        Items cleared after 5 minutes! Copyright-Note: This website doesn't download directly from Spotify!
+        Copyright-Note: This website doesn't download directly from Spotify!
     </div>
 
     <footer>
@@ -208,14 +208,12 @@
                     const folderPath = filePath.substring(0, filePath.lastIndexOf('/')); 
 
                     const downloadLink = `https://${server_url}/downloader/${folderPath}/${encodeURIComponent(fileName)}`;
-                    const backupLink = `https://${server_url}/downloader/${folderPath}/`;
 
                     messageDiv.innerHTML = `
                         Success: <a href="${downloadLink}" download="${fileName}">${fileName}</a>
                         <a href="${downloadLink}" download="${fileName}">
                             <button>Download</button>
                         </a>
-                        Link broken? <a href="${backupLink}">Click here!</a>
                     `;
                 } else {
                     messageDiv.innerHTML = `Error: ${result.detail}`;
