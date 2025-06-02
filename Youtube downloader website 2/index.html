@@ -536,7 +536,15 @@
                         body: JSON.stringify({ url, quality })
                     });
 
-                    if (!response.ok) throw new Error('Server-Error while downloading');
+                    if (!response.ok) {
+                        let errorMsg = 'Server-Error while downloading';
+                        try {
+                            const data = await response.json();
+                            if (data && data.error) errorMsg = data.error;
+                        } catch (e) {
+                        }
+                        throw new Error(errorMsg);
+                    }
 
                     let filename = 'download_groupxyz.me.mp4';
                     const disposition = response.headers.get('Content-Disposition');
