@@ -23,6 +23,8 @@ app.use(cors({
   origin: [
     'https://downloader.groupxyz.me',
     'http://downloader.groupxyz.me',
+    'https://groupxyz.me',
+    'http://groupxyz.me',
     'http://localhost:3000',
     'http://localhost:8080',
     'http://127.0.0.1:3000'
@@ -89,6 +91,11 @@ app.post('/api/download', async (req, res) => {
       preferFreeFormats: true,
       youtubeSkipDashManifest: true
     });
+
+    const availableFormat = (info.formats || []).find(f => f.format_id === quality || f.ext === quality || f.format_note === quality || f.quality_label === quality);
+    if (!availableFormat && !quality.includes('mp3') && !quality.includes('m4a')) {
+      return res.status(400).json({ error: 'Requested format is not available.' });
+    }
 
     const title = sanitizeFilename(info.title || 'download_groupxyz.me');
     const ext = quality.includes('mp3') ? 'mp3' : quality.includes('m4a') ? 'm4a' : 'mp4';
