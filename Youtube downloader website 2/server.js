@@ -94,7 +94,7 @@ app.post('/api/download', async (req, res) => {
 
     const availableFormat = (info.formats || []).find(f => f.format_id === quality || f.ext === quality || f.format_note === quality || f.quality_label === quality);
     if (!availableFormat && !quality.includes('mp3') && !quality.includes('m4a')) {
-      return res.status(400).json({ error: 'Requested format is not available.' });
+      return res.status(400).json({ error: 'Requested format is not available. Try another format.' });
     }
 
     const title = sanitizeFilename(info.title || 'download_groupxyz.me');
