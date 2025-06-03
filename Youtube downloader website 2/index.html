@@ -498,6 +498,10 @@
                     const disposition = response.headers.get('Content-Disposition');
                     if (disposition && disposition.includes('filename=')) {
                         filename = disposition.split('filename=')[1].replace(/"/g, '');
+                    } else {
+                        const now = new Date();
+                        const timestamp = now.toISOString().replace(/[-:T]/g, '').slice(0, 15);
+                        filename = `download_groupxyz.me_${timestamp}.${quality}`;
                     }
                     const contentType = response.headers.get('Content-Type');
                     const blob = await response.blob();
