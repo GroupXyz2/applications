@@ -64,13 +64,13 @@ app.post('/api/download', async (req, res) => {
     if (url.includes('spotify.com')) {
       let spotUrl = url.replace(/\/intl-[a-z]{2}(?:-[A-Z]{2,3})?\//g, '/');
       spotUrl = spotUrl.split('?')[0];
-      const spotdl = spawn('spotdl', [spotUrl, '--output', '-', '--format', 'mp3'], { stdio: ['ignore', 'pipe', 'pipe'] });
-      let chunks = [];
-      let errorOutput = '';
+      const path = require('path');
+      const fs = require('fs');
+      const { spawn } = require('child_process');
       let responded = false;
-      spotdl.stdout.on('data', (data) => {
-        chunks.push(data);
-      });
+      let errorOutput = '';
+      const scriptDir = process.cwd();
+      const spotdl = spawn('spotdl', [spotUrl, '--format', 'mp3', '--bitrate', '192k'], { stdio: ['ignore', 'pipe', 'pipe'] });
       spotdl.stderr.on('data', (data) => {
         errorOutput += data.toString();
         console.error(`[spotDL] ${data}`);
@@ -87,26 +87,43 @@ app.post('/api/download', async (req, res) => {
       spotdl.on('close', (code) => {
         if (responded) return;
         responded = true;
-        if (code !== 0) {
-          const log = errorOutput || Buffer.concat(chunks).toString() || 'Unknown error';
-          res.setHeader('Content-Disposition', 'attachment; filename="error.log"');
-          res.setHeader('Content-Type', 'text/plain');
-          res.end('Spotify download failed!\n' + log);
-          return;
-        }
-        const buffer = Buffer.concat(chunks);
-        const isMp3 = buffer.slice(0, 3).toString() === 'ID3' || (buffer[0] === 0xFF && (buffer[1] & 0xE0) === 0xE0);
-        if (!isMp3) {
-          const log = errorOutput + '\n' + buffer.toString();
-          res.setHeader('Content-Disposition', 'attachment; filename="error.log"');
-          res.setHeader('Content-Type', 'text/plain');
-          res.end('Spotify did not return a valid MP3 file!\n' + log);
-          return;
-        }
-        const filename = 'spotify_track.mp3';
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-        res.setHeader('Content-Type', 'audio/mpeg');
-        res.end(buffer);
+        fs.readdir(scriptDir, (dirErr, files) => {
+          if (dirErr) {
+            res.setHeader('Content-Disposition', 'attachment; filename="error.log"');
+            res.setHeader('Content-Type', 'text/plain');
+            res.end('Spotify download failed!\n' + errorOutput + '\n' + dirErr.toString());
+            return;
+          }
+          const mp3Files = files.filter(f => f.endsWith('.mp3')).map(f => {
+            const fullPath = path.join(scriptDir, f);
+            let mtime = 0;
+            try { mtime = fs.statSync(fullPath).mtimeMs; } catch { mtime = 0; }
+            return { file: f, mtime };
+          }).sort((a, b) => b.mtime - a.mtime);
+          if (!mp3Files.length) {
+            const log = errorOutput + '\nNo MP3 file found.';
+            res.setHeader('Content-Disposition', 'attachment; filename="error.log"');
+            res.setHeader('Content-Type', 'text/plain');
+            res.end('Spotify download failed!\n' + log);
+            return;
+          }
+          const mp3File = mp3Files[0].file;
+          const mp3Path = path.join(scriptDir, mp3File);
+          fs.readFile(mp3Path, (err, buffer) => {
+            fs.unlink(mp3Path, () => {});
+            if (code !== 0 || err || !buffer || buffer.length < 1000) {
+              const log = errorOutput + '\n' + (buffer ? buffer.toString() : '');
+              res.setHeader('Content-Disposition', 'attachment; filename="error.log"');
+              res.setHeader('Content-Type', 'text/plain');
+              res.end('Spotify download failed!\n' + log);
+              return;
+            }
+            const filename = mp3File;
+            res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+            res.setHeader('Content-Type', 'audio/mpeg');
+            res.end(buffer);
+          });
+        });
       });
       return;
     }
@@ -277,7 +294,7 @@ app.post('/api/info', async (req, res) => {
     if (url.includes('spotify.com')) {
       let spotUrl = url.replace(/\/intl-[a-z]{2}(?:-[A-Z]{2,3})?\//g, '/');
       spotUrl = spotUrl.split('?')[0];
-      const spotdl = spawn('spotdl', ['meta', spotUrl, '--output', 'json']);
+      const spotdl = spawn('spotdl', ['meta', spotUrl, 'json']);
       let output = '';
       let errorOutput = '';
       let responded = false;
