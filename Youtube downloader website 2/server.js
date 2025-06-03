@@ -7,15 +7,31 @@ const { PassThrough } = require('stream');
 const fs = require('fs');
 const https = require('https');
 const { spawn } = require('child_process');
+require('dotenv').config();
 
 const app = express();
 const PORT = 3000;
+const API_KEY = process.env.API_KEY;
 
 process.on('uncaughtException', (err) => {
   console.error('[FATAL] Uncaught Exception:', err);
 });
 process.on('unhandledRejection', (reason, promise) => {
   console.error('[FATAL] Unhandled Rejection:', reason);
+});
+
+app.use((req, res, next) => {
+  const clientKey = req.headers['x-api-key'];
+  if (API_KEY && clientKey) {
+    console.log(`[API Key Check] Client Key: ${clientKey}, Expected Key: ${API_KEY}`);
+    if (clientKey === API_KEY) {
+      res.header('Access-Control-Allow-Origin', '*');
+      res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-API-Key');
+      res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      if (req.method === 'OPTIONS') return res.sendStatus(200);
+    }
+  }
+  next();
 });
 
 app.use(helmet());
@@ -141,11 +157,13 @@ app.post('/api/download', async (req, res) => {
     });
 
     const title = sanitizeFilename(info.title || 'download_groupxyz.me');
+    const now = new Date();
+    const timestamp = now.toISOString().replace(/[-:T]/g, '').slice(0, 15);
     let ext = 'mp4';
     if (quality.includes('mp3')) ext = 'mp3';
     else if (quality.includes('m4a')) ext = 'm4a';
     else if (quality.includes('webm')) ext = 'webm';
-    const filename = `${title}.${ext}`;
+    const filename = `${title}_${timestamp}.${ext}`;
 
     const tempFiles = [];
     const tmp = require('os').tmpdir();
@@ -179,10 +197,13 @@ app.post('/api/download', async (req, res) => {
     let responded = false;
     ytdlp.stderr.on('data', (data) => {
       errorOutput += data.toString();
-      console.error(`[yt-dlp] ${data}`);
+      console.error(`[yt-dlp][stderr] ${data}`);
+    });
+    ytdlp.stdout.on('data', (data) => {
+      console.error(`[yt-dlp][stdout] ${data}`);
     });
     ytdlp.on('error', (err) => {
-      console.error('yt-dlp error:', err);
+      console.error('[yt-dlp][error event]', err);
       if (!responded) {
         responded = true;
         res.setHeader('Content-Disposition', 'attachment; filename="error.log"');
@@ -192,9 +213,11 @@ app.post('/api/download', async (req, res) => {
       }
     });
     ytdlp.on('close', (code) => {
+      console.error('[yt-dlp][close event] Exit code:', code);
       if (responded) return;
       if (ext === 'mp4') {
         fs.readFile(mp4Output, (err, buffer) => {
+          console.error('[yt-dlp][readFile mp4Output] err:', err, 'buffer length:', buffer && buffer.length);
           responded = true;
           if (code !== 0 || err || !buffer || buffer.length < 1000) {
             const log = errorOutput + '\n' + (buffer ? buffer.toString() : '');
@@ -213,6 +236,7 @@ app.post('/api/download', async (req, res) => {
         return;
       }
       fs.readFile(tempInput, (err, buffer) => {
+        console.error('[yt-dlp][readFile tempInput] err:', err, 'buffer length:', buffer && buffer.length);
         if (code !== 0 || err || !buffer || buffer.length < 1000) {
           responded = true;
           const log = errorOutput + '\n' + (buffer ? buffer.toString() : '');
@@ -232,8 +256,10 @@ app.post('/api/download', async (req, res) => {
           ], { stdio: ['ignore', 'pipe', 'pipe'] });
           tempFiles.push(tempOutput);
           let ffmpegErr = '';
-          ffmpeg.stderr.on('data', (d) => ffmpegErr += d.toString());
+          ffmpeg.stderr.on('data', (d) => { ffmpegErr += d.toString(); console.error('[ffmpeg][stderr]', d.toString()); });
+          ffmpeg.stdout.on('data', (d) => { console.error('[ffmpeg][stdout]', d.toString()); });
           ffmpeg.on('error', (err) => {
+            console.error('[ffmpeg][error event]', err);
             if (!responded) {
               responded = true;
               res.setHeader('Content-Disposition', 'attachment; filename="error.log"');
@@ -243,8 +269,10 @@ app.post('/api/download', async (req, res) => {
             }
           });
           ffmpeg.on('close', (ffcode) => {
+            console.error('[ffmpeg][close event] Exit code:', ffcode);
             if (responded) return;
             fs.readFile(tempOutput, (err2, outBuffer) => {
+              console.error('[ffmpeg][readFile tempOutput] err:', err2, 'buffer length:', outBuffer && outBuffer.length);
               responded = true;
               if (ffcode !== 0 || err2 || !outBuffer || outBuffer.length < 1000) {
                 res.setHeader('Content-Disposition', 'attachment; filename="error.log"');
