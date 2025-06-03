@@ -388,24 +388,7 @@
             </div>
             <div class="input-group">
                 <label class="input-label">Choose your format</label>
-                <div class="quality-selector">
-                    <div class="quality-option">
-                        <input type="radio" id="qualityBest" name="quality" value="best[height<=720]" class="quality-radio" checked>
-                        <label for="qualityBest" class="quality-label">720p MP4 (Video)</label>
-                    </div>
-                    <div class="quality-option">
-                        <input type="radio" id="quality1080" name="quality" value="best[height<=1080]" class="quality-radio">
-                        <label for="quality1080" class="quality-label">1080p MP4 (Video)</label>
-                    </div>
-                    <div class="quality-option">
-                        <input type="radio" id="qualityAudio" name="quality" value="best[ext=m4a]" class="quality-radio">
-                        <label for="qualityAudio" class="quality-label">M4A (Audio)</label>
-                    </div>
-                    <div class="quality-option">
-                        <input type="radio" id="qualityAudioMP3" name="quality" value="best[ext=mp3]" class="quality-radio">
-                        <label for="qualityAudioMP3" class="quality-label">MP3 (Audio)</label>
-                    </div>
-                </div>
+                <div class="quality-selector" id="qualitySelector"></div>
             </div>
             <button type="submit" id="downloadBtn" class="download-btn">
                 🚀 Download now!
@@ -431,91 +414,53 @@
                 this.initializeEventListeners();
             }
 
+            displayFormatsOnly() {
+                const qualitySelector = document.getElementById('qualitySelector');
+                qualitySelector.innerHTML = '';
+                const formats = [
+                    { id: 'mp4', label: 'MP4 (Video)', ext: 'mp4' },
+                    { id: 'mp3', label: 'MP3 (Audio)', ext: 'mp3' },
+                    { id: 'm4a', label: 'M4A (Audio)', ext: 'm4a' },
+                    { id: 'webm', label: 'WEBM (Audio)', ext: 'webm' }
+                ];
+                formats.forEach((f, i) => {
+                    const option = document.createElement('div');
+                    option.className = 'quality-option';
+                    option.innerHTML = `
+                        <input type="radio" name="quality" id="quality_${f.id}" class="quality-radio" value="${f.ext}" ${i === 0 ? 'checked' : ''}>
+                        <label for="quality_${f.id}" class="quality-label">${f.label}</label>
+                    `;
+                    qualitySelector.appendChild(option);
+                });
+            }
+
             initializeEventListeners() {
-                document.getElementById('infoBtn').addEventListener('click', () => this.loadVideoInfo());
                 document.getElementById('infoBtn').style.display = 'none';
                 document.getElementById('downloadForm').addEventListener('submit', (e) => {
                     e.preventDefault();
                     this.startDownload();
                 });
-                
+                this.displayFormatsOnly();
                 document.getElementById('urlInput').addEventListener('input', () => {
-                    document.getElementById('videoInfo').style.display = 'none';
+                    this.displayFormatsOnly();
                 });
-            }
-
-            async loadVideoInfo() {
-                const url = document.getElementById('urlInput').value.trim();
-                if (!url) {
-                    this.showToast('Please enter a URL!', 'error');
-                    return;
-                }
-
-                const infoBtn = document.getElementById('infoBtn');
-                const originalText = infoBtn.textContent;
-                infoBtn.textContent = '⏳ Loading info...';
-                infoBtn.disabled = true;
-
-                try {
-                    const videoInfo = await this.extractVideoInfo(url);
-                    this.currentVideoInfo = videoInfo;
-                    this.displayVideoInfo(videoInfo);
-                    this.showToast('Media info loaded!', 'success');
-                } catch (error) {
-                    this.showToast(`Error loading media info: ${error.message}`, 'error');
-                } finally {
-                    infoBtn.textContent = originalText;
-                    infoBtn.disabled = false;
-                }
-            }
-
-            async extractVideoInfo(url) {
-                const response = await fetch(getApiBaseUrl() + '/api/info', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url })
-                });
-                if (!response.ok) {
-                    const data = await response.json().catch(() => ({}));
-                    throw new Error(data.error || 'Error loading video info');
-                }
-                return await response.json();
-            }
-
-            displayVideoInfo(info) {
-                document.getElementById('videoTitle').textContent = info.title;
-                document.getElementById('videoUploader').textContent = `By: ${info.uploader}`;
-                document.getElementById('videoDuration').textContent = `Duration: ${info.duration}`;
-                document.getElementById('videoViews').textContent = info.views ? `${info.views} views` : '';
-                document.getElementById('videoThumbnail').src = info.thumbnail;
-
-                const formatsList = document.getElementById('formatsList');
-                formatsList.innerHTML = '';
-                
-                info.formats.forEach(format => {
-                    const formatItem = document.createElement('div');
-                    formatItem.className = 'format-item';
-                    formatItem.innerHTML = `
-                        <span class="format-quality">${format.quality} (${format.ext})</span>
-                        <span class="format-size">${format.size}</span>
-                    `;
-                    formatsList.appendChild(formatItem);
-                });
-
-                document.getElementById('videoInfo').style.display = 'block';
             }
 
             async startDownload() {
                 if (this.isDownloading) return;
-
                 const url = document.getElementById('urlInput').value.trim();
-                const quality = document.querySelector('input[name="quality"]:checked').value;
-
+                const qualityRadios = document.getElementsByName('quality');
+                let quality = 'mp3';
+                for (const radio of qualityRadios) {
+                    if (radio.checked) {
+                        quality = radio.value;
+                        break;
+                    }
+                }
                 if (!url) {
                     this.showToast('Please enter a URL!', 'error');
                     return;
                 }
-
                 this.isDownloading = true;
                 const downloadBtn = document.getElementById('downloadBtn');
                 const progressContainer = document.getElementById('progressContainer');
@@ -541,18 +486,31 @@
                         try {
                             const data = await response.json();
                             if (data && data.error) errorMsg = data.error;
-                        } catch (e) {
-                        }
+                        } catch (e) {}
                         throw new Error(errorMsg);
                     }
 
-                    let filename = 'download_groupxyz.me.mp4';
+                    let filename = 'download_groupxyz.me.' + quality;
                     const disposition = response.headers.get('Content-Disposition');
                     if (disposition && disposition.includes('filename=')) {
                         filename = disposition.split('filename=')[1].replace(/"/g, '');
                     }
-
+                    const contentType = response.headers.get('Content-Type');
                     const blob = await response.blob();
+
+                    if ((filename.endsWith('.log') || (contentType && contentType.startsWith('text/plain')))) {
+                        const text = await blob.text();
+                        this.showToast('Download error: ' + text, 'error');
+                        progressLabel.textContent = '❌ Download failed';
+                        this.isDownloading = false;
+                        downloadBtn.textContent = '🚀 Download now!';
+                        downloadBtn.disabled = false;
+                        setTimeout(() => {
+                            progressContainer.classList.remove('show');
+                        }, 3000);
+                        return;
+                    }
+
                     progressFill.style.width = '100%';
                     progressLabel.textContent = '✅ Download complete!';
                     this.showToast('Download finished!', 'success');
@@ -583,10 +541,8 @@
             showToast(message, type = 'success') {
                 const toast = document.getElementById('toast');
                 const toastMessage = document.getElementById('toastMessage');
-                
                 toastMessage.textContent = message;
                 toast.className = 'toast show' + (type === 'error' ? ' error' : '');
-                
                 setTimeout(() => {
                     toast.classList.remove('show');
                 }, 4000);
