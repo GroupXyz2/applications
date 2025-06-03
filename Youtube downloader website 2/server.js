@@ -52,6 +52,7 @@ function sanitizeFilename(name) {
 app.post('/api/download', async (req, res) => {
   try {
     const { url, quality } = req.body;
+    console.log('Download request:', url, 'Quality:', quality);
     if (
       typeof url !== 'string' ||
       !/^https?:\/\//.test(url)
@@ -110,6 +111,10 @@ app.post('/api/download', async (req, res) => {
       return;
     }
 
+    if (!quality || typeof quality !== 'string' || !quality.trim()) {
+      return res.status(400).json({ error: 'No format specified.' });
+    }
+
     const info = await exec(url, {
       dumpSingleJson: true,
       noWarnings: true,
@@ -118,43 +123,141 @@ app.post('/api/download', async (req, res) => {
       youtubeSkipDashManifest: true
     });
 
-    const availableFormat = (info.formats || []).find(f => f.format_id === quality || f.ext === quality || f.format_note === quality || f.quality_label === quality);
-    if (!availableFormat && !quality.includes('mp3') && !quality.includes('m4a')) {
-      return res.status(400).json({ error: 'Requested format is not available. Try another format.' });
-    }
-
     const title = sanitizeFilename(info.title || 'download_groupxyz.me');
-    const ext = quality.includes('mp3') ? 'mp3' : quality.includes('m4a') ? 'm4a' : 'mp4';
+    let ext = 'mp4';
+    if (quality.includes('mp3')) ext = 'mp3';
+    else if (quality.includes('m4a')) ext = 'm4a';
+    else if (quality.includes('webm')) ext = 'webm';
     const filename = `${title}.${ext}`;
 
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Type', 'application/octet-stream');
+    const tempFiles = [];
+    const tmp = require('os').tmpdir();
+    const path = require('path');
+    const { v4: uuidv4 } = require('uuid');
+    const tempBase = path.join(tmp, 'ytdl_' + uuidv4());
+    const tempInput = tempBase + '_input';
+    const tempOutput = tempBase + '_output';
+    let mp4Output = tempBase + '.mp4';
 
-    const ytdlp = exec(url, {
-      output: '-',
-      format: quality,
-      audioFormat: ext === 'mp3' ? 'mp3' : undefined,
-      audioQuality: '0',
-      noCheckCertificate: true,
-      noWarnings: true,
-      preferFreeFormats: true,
-      youtubeSkipDashManifest: true,
-    }, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let ytdlpFormat = 'bestaudio/best';
+    let ytdlpArgs = [];
+    if (ext === 'mp4') {
+      ytdlpFormat = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best';
+      ytdlpArgs = [
+        '-f', ytdlpFormat,
+        '--merge-output-format', 'mp4',
+        '-o', mp4Output,
+        url
+      ];
+    } else {
+      ytdlpArgs = [
+        '-f', ytdlpFormat,
+        '-o', tempInput,
+        url
+      ];
+    }
+    const ytdlp = spawn('yt-dlp', ytdlpArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
 
-    ytdlp.stdout.pipe(res);
+    let errorOutput = '';
+    let responded = false;
     ytdlp.stderr.on('data', (data) => {
+      errorOutput += data.toString();
       console.error(`[yt-dlp] ${data}`);
     });
     ytdlp.on('error', (err) => {
       console.error('yt-dlp error:', err);
-      res.status(500).end('Error during download.');
-    });
-    ytdlp.on('close', (code) => {
-      if (code !== 0) {
-        console.error('yt-dlp exited with code', code);
-        res.status(500).end('Error during download.');
+      if (!responded) {
+        responded = true;
+        res.setHeader('Content-Disposition', 'attachment; filename="error.log"');
+        res.setHeader('Content-Type', 'text/plain');
+        res.end('Error during download.\n' + (err.message || ''));
+        cleanupTempFiles();
       }
     });
+    ytdlp.on('close', (code) => {
+      if (responded) return;
+      if (ext === 'mp4') {
+        fs.readFile(mp4Output, (err, buffer) => {
+          responded = true;
+          if (code !== 0 || err || !buffer || buffer.length < 1000) {
+            const log = errorOutput + '\n' + (buffer ? buffer.toString() : '');
+            res.setHeader('Content-Disposition', 'attachment; filename="error.log"');
+            res.setHeader('Content-Type', 'text/plain');
+            res.end('yt-dlp failed or did not return a valid mp4 file!\n' + log);
+            cleanupTempFiles();
+            return;
+          }
+          res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+          res.setHeader('Content-Type', 'video/mp4');
+          res.end(buffer);
+          cleanupTempFiles();
+        });
+        tempFiles.push(mp4Output);
+        return;
+      }
+      fs.readFile(tempInput, (err, buffer) => {
+        if (code !== 0 || err || !buffer || buffer.length < 1000) {
+          responded = true;
+          const log = errorOutput + '\n' + (buffer ? buffer.toString() : '');
+          res.setHeader('Content-Disposition', 'attachment; filename="error.log"');
+          res.setHeader('Content-Type', 'text/plain');
+          res.end('yt-dlp failed or did not return a valid file!\n' + log);
+          cleanupTempFiles();
+          return;
+        }
+        if (ext === 'mp3' || ext === 'm4a' || ext === 'webm') {
+          const ffmpeg = spawn('ffmpeg', [
+            '-i', tempInput,
+            '-vn',
+            '-acodec', ext === 'mp3' ? 'libmp3lame' : (ext === 'm4a' ? 'aac' : 'libvorbis'),
+            '-f', ext,
+            tempOutput
+          ], { stdio: ['ignore', 'pipe', 'pipe'] });
+          tempFiles.push(tempOutput);
+          let ffmpegErr = '';
+          ffmpeg.stderr.on('data', (d) => ffmpegErr += d.toString());
+          ffmpeg.on('error', (err) => {
+            if (!responded) {
+              responded = true;
+              res.setHeader('Content-Disposition', 'attachment; filename="error.log"');
+              res.setHeader('Content-Type', 'text/plain');
+              res.end('ffmpeg error converting file.\n' + (err.message || ''));
+              cleanupTempFiles();
+            }
+          });
+          ffmpeg.on('close', (ffcode) => {
+            if (responded) return;
+            fs.readFile(tempOutput, (err2, outBuffer) => {
+              responded = true;
+              if (ffcode !== 0 || err2 || !outBuffer || outBuffer.length < 1000) {
+                res.setHeader('Content-Disposition', 'attachment; filename="error.log"');
+                res.setHeader('Content-Type', 'text/plain');
+                res.end('ffmpeg failed to convert file!\n' + ffmpegErr);
+                cleanupTempFiles();
+                return;
+              }
+              res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+              res.setHeader('Content-Type', ext === 'mp3' ? 'audio/mpeg' : (ext === 'm4a' ? 'audio/mp4' : 'audio/webm'));
+              res.end(outBuffer);
+              cleanupTempFiles();
+            });
+          });
+        } else {
+          responded = true;
+          res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+          res.setHeader('Content-Type', 'application/octet-stream');
+          res.end(buffer);
+          cleanupTempFiles();
+        }
+      });
+    });
+
+    function cleanupTempFiles() {
+      for (const f of tempFiles) {
+        fs.unlink(f, () => {});
+      }
+    }
+    return;
   } catch (err) {
     console.error('Download-Handler Exception:', err);
     res.status(500).json({ error: 'Internal server error.' });
