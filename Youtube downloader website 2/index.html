@@ -483,10 +483,14 @@
 
                     if (!response.ok) {
                         let errorMsg = 'Server-Error while downloading';
-                        try {
-                            const data = await response.json();
-                            if (data && data.error) errorMsg = data.error;
-                        } catch (e) {}
+                        if (response.status === 429) {
+                            errorMsg = 'Too many requests. Please wait a while before trying again.';
+                        } else {
+                            try {
+                                const data = await response.json();
+                                if (data && data.error) errorMsg = data.error;
+                            } catch (e) {}
+                        }
                         throw new Error(errorMsg);
                     }
 
