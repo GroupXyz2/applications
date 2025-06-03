@@ -64,22 +64,48 @@ app.post('/api/download', async (req, res) => {
       let spotUrl = url.replace(/\/intl-[a-z]{2}(?:-[A-Z]{2,3})?\//g, '/');
       spotUrl = spotUrl.split('?')[0];
       const spotdl = spawn('spotdl', [spotUrl, '--output', '-', '--format', 'mp3'], { stdio: ['ignore', 'pipe', 'pipe'] });
-      const filename = 'spotify_track.mp3';
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      res.setHeader('Content-Type', 'audio/mpeg');
-      spotdl.stdout.pipe(res);
+      let chunks = [];
+      let errorOutput = '';
+      let responded = false;
+      spotdl.stdout.on('data', (data) => {
+        chunks.push(data);
+      });
       spotdl.stderr.on('data', (data) => {
+        errorOutput += data.toString();
         console.error(`[spotDL] ${data}`);
       });
       spotdl.on('error', (err) => {
         console.error('spotDL error:', err);
-        res.status(500).end('Error during Spotify download.');
+        if (!responded) {
+          responded = true;
+          res.setHeader('Content-Disposition', 'attachment; filename="error.log"');
+          res.setHeader('Content-Type', 'text/plain');
+          res.end('Error during Spotify download.\n' + (err.message || ''));
+        }
       });
       spotdl.on('close', (code) => {
+        if (responded) return;
+        responded = true;
         if (code !== 0) {
-          console.error('spotDL exited with code', code);
-          res.status(500).end('Error during Spotify download.');
+          const log = errorOutput || Buffer.concat(chunks).toString() || 'Unknown error';
+          res.setHeader('Content-Disposition', 'attachment; filename="error.log"');
+          res.setHeader('Content-Type', 'text/plain');
+          res.end('Spotify download failed!\n' + log);
+          return;
         }
+        const buffer = Buffer.concat(chunks);
+        const isMp3 = buffer.slice(0, 3).toString() === 'ID3' || (buffer[0] === 0xFF && (buffer[1] & 0xE0) === 0xE0);
+        if (!isMp3) {
+          const log = errorOutput + '\n' + buffer.toString();
+          res.setHeader('Content-Disposition', 'attachment; filename="error.log"');
+          res.setHeader('Content-Type', 'text/plain');
+          res.end('Spotify did not return a valid MP3 file!\n' + log);
+          return;
+        }
+        const filename = 'spotify_track.mp3';
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Content-Type', 'audio/mpeg');
+        res.end(buffer);
       });
       return;
     }
